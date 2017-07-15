@@ -24,7 +24,7 @@ This repo contains the project that will extract, transform and load college dat
 
     6. In the .bash_profile file, update the PATH setting.  It should look like this.
 
-    7. export PATH=$PATH:/usr/local/sbin:/Users/erwinschoolzilla/spark-2.1.1-bin-hadoop2.7/bin:/Users/erwinschoolzilla/spark-2.1.1-bin-hadoop2.7/sbin
+    7. export PATH=$PATH:/usr/local/sbin:/Users/erwin/spark-2.1.1-bin-hadoop2.7/bin:/Users/erwin/spark-2.1.1-bin-hadoop2.7/sbin
 
 4. Go to your Apache Spark installation.
 
