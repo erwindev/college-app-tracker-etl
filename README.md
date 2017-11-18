@@ -46,13 +46,11 @@ This repo contains the project that will extract, transform and load college dat
 
         $ start-master.sh
 
-    5.2. Go to the[Apache Spark Console](http://localhost:8081/).
+    5.2. Go to the [Apache Spark Console](http://localhost:8080/).
 
-    5.3. Start the workers
+    5.3. Start the workers  
 
-        $ start-slave.sh "spark url"
-
-        $ start-slave.sh spark://10.0.0.117:7077
+        $ start-slave.sh spark://Erwins-iMac.local:7077
 
 6. You should see something like that in your Apache Spark Console.  Those numbers should match what you defined in spark-env.sh![image alt text](readme_assets/apache_spark_master_console.png)
 
