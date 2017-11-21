@@ -56,9 +56,9 @@ This repo contains the project that will extract, transform and load college dat
 
 7. To stop spark
 
-    7.1. prompt> stop-master.sh
+        $ stop-master.sh
 
-    7.2. prompt> stop-slave.sh
+        $ stop-slave.sh
 
 ## Submit Spark Job
 

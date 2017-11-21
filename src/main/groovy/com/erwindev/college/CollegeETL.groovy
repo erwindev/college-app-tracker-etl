@@ -28,20 +28,34 @@ class CollegeETL {
         /*
         EXTRACT
          */
-        Dataset<Row> df = sqlContext.read()
+        Dataset<Row> hd_df = sqlContext.read()
                 .format("com.databricks.spark.csv")
                 .option("header", "true")
                 .option("inferSchema", "true")
-                .load("files/hd2015.csv")
+                .load("files/hd2016.csv")
 
         Dataset<Row> fdf = sqlContext.read()
                 .format("com.databricks.spark.csv")
                 .option("header", "true")
                 .option("inferSchema", "true")
-                .load("files/hd2015-Frequencies.csv")
+                .load("files/hd2016-Frequencies.csv")
 
-        sqlContext.registerDataFrameAsTable(df, "college")
-        sqlContext.registerDataFrameAsTable(fdf, "lookup_values")
+        Dataset<Row> staff_df = sqlContext.read()
+                .format("com.databricks.spark.csv")
+                .option("header", "true")
+                .option("inferSchema", "true")
+                .load("files/s2015_oc.csv")
+
+        Dataset<Row> tution_df = sqlContext.read()
+                .format("com.databricks.spark.csv")
+                .option("header", "true")
+                .option("inferSchema", "true")
+                .load("files/ic2016_ay.csv")
+
+        sqlContext.registerDataFrameAsTable(hd_df, "college")
+        sqlContext.registerDataFrameAsTable(staff_df, "staff")
+        sqlContext.registerDataFrameAsTable(tution_df, "tuition")
+        sqlContext.registerDataFrameAsTable(fdf, "college_lookup_values")
 
         /*
         TRANSFORM
@@ -74,16 +88,92 @@ class CollegeETL {
             }
         }, DataTypes.IntegerType)
 
-        //Add SZ_CUSTID column
-        //Add a UUID column
+        //Define processStaffCat method
+        sqlContext.udf().register("processStaffCat", new UDF1<Integer, String>() {
+            @Override
+            public String call(Integer cat) throws Exception {
+                String val = "NONE"
+                switch(cat){
+                    case 2200:
+                        val = "TOTAL_FULLTIME"
+                        break
+                    case 2210:
+                        val = "TOTAL_FULLTIME_INSTRUCTIONAL"
+                        break
+                    case 2220:
+                        val = "TOTAL_FULLTIME_RESEARCH"
+                        break
+                    case 2230:
+                        val = "TOTAL_FULLTIME_PUBLIC"
+                        break
+                    case 3200:
+                        val = "TOTAL_PARTTIME"
+                        break
+                    case 3210:
+                        val = "TOTAL_PARTTIME_INSTRUCTIONAL"
+                        break
+                    case 3220:
+                        val = "TOTAL_PARTTIME_RESEARCH"
+                        break
+                    case 3230:
+                        val = "TOTAL_PARTTIME_PUBLIC"
+                        break
+                }
+                return val
+            }
+        }, DataTypes.StringType)
+
         //Lookup value of State Abbr and transform to Full State Name
-        Dataset<Row> df1 = sqlContext.sql("select randomUUID('') ID, " +
+        Dataset<Row> collegeDs = sqlContext.sql("select a.UNITID, a.INSTNM, a.ADDR, a.CITY, " +
                 "b.valuelabel STATE, " +
-                "addColumn('3003') SZ_CUSTID, a.* " +
-                "from college a, lookup_values b " +
+                "a.ZIP, " +
+                "c.valuelabel REGION, " +
+                "d.valuelabel SECTOR,  " +
+                "a.GENTELE TELEPHONE, " +
+                "a.WEBADDR WEB_URL, " +
+                "a.ADMINURL ADMISSION_URL, " +
+                "a.APPLURL APPLICATION_URL, " +
+                "e.valuelabel LOCALE, " +
+                "a.LONGITUD, " +
+                "a.LATITUDE " +
+                "from college a, college_lookup_values b, college_lookup_values c, college_lookup_values d, college_lookup_values e " +
                 "where b.codevalue = a.STABBR " +
-                "and b.varname = 'STABBR'").toDF()
-        df1.show()
+                "and c.codevalue = a.OBEREG " +
+                "and d.codevalue = a.SECTOR " +
+                "and e.codevalue = a.LOCALE " +
+                "and b.varname = 'STABBR' " +
+                "and c.varname = 'OBEREG' " +
+                "and d.varname = 'SECTOR' " +
+                "and e.varname = 'LOCALE' ").toDF()
+        collegeDs.show(3)
+
+        Dataset<Row> staffDs = sqlContext.sql(
+                "select " +
+                        "a.UNITID, " +
+                        "a.HRTOTLT, " +
+                        "processStaffCat(a.STAFFCAT) TYPE " +
+                        "from staff a " +
+                        "where " +
+                        "a.STAFFCAT in (2200, 2210, 2220, 2230, 3200, 3210, 3220, 3230) ").toDF()
+
+        staffDs.show(20)
+
+        Dataset<Row> tutionDs = sqlContext.sql(
+                "select " +
+                        "a.UNITID, " +
+                        "a.TUITION2 IN_STATE_TUITION_UNDERGRAD, " +
+                        "a.FEE2 IN_STATE_FEE_UNDERGRAD, " +
+                        "a.TUITION3 OUT_OF_STATE_TUITION_UNDERGRAD, " +
+                        "a.FEE3 OUT_OF_STATE_FEE_UNDERGRAD, " +
+                        "a.TUITION6 IN_STATE_TUITION_GRAD, " +
+                        "a.FEE6 IN_STATE_FEE_GRAD, " +
+                        "a.TUITION7 OUT_OF_STATE_TUITION_GRAD, " +
+                        "a.FEE7 OUT_OF_STATE_FEE_GRAD " +
+                        "from tuition a ").toDF()
+
+        tutionDs.show(20)
+
+        collegeDs = collegeDs.join(tutionDs, "UNITID")
 
         /*
         LOAD (write to postgress database)
@@ -93,13 +183,10 @@ class CollegeETL {
         props.setProperty('password', dbPassword)
         props.setProperty("driver", "org.postgresql.Driver")
 
-        //Write to the database or Write back to S3 as an AVRO file
-        df1.write().mode('overwrite').jdbc(dbUrl, 'college_etl', props)
-
-        //send message a queue i'm done
+        collegeDs.write().mode('overwrite').jdbc(dbUrl, 'college', props)
+        staffDs.write().mode('overwrite').jdbc(dbUrl, 'staff', props)
 
         sc.stop()
-
 
 
     }
